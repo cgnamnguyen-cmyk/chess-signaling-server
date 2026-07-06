@@ -48,6 +48,35 @@ wss.on('connection', (ws) => {
                     }
                 }
             } 
+            else if (type === 'join_random') {
+                const peerId = data.peer_id;
+                let foundRoom = null;
+
+                for (const [roomCode, peers] of rooms.entries()) {
+                    if (peers.size === 1) {
+                        foundRoom = roomCode;
+                        break;
+                    }
+                }
+
+                if (foundRoom) {
+                    currentRoom = foundRoom;
+                    currentPeerId = peerId;
+                    rooms.get(foundRoom).set(peerId, ws);
+                    console.log(`[Join Random] Peer ${peerId} joined random room ${foundRoom}`);
+
+                    ws.send(JSON.stringify({ type: 'joined_random', room: foundRoom }));
+
+                    const peers = rooms.get(foundRoom);
+                    for (const [otherId, otherWs] of peers.entries()) {
+                        if (otherId !== peerId) {
+                            otherWs.send(JSON.stringify({ type: 'peer_joined', peer_id: peerId }));
+                        }
+                    }
+                } else {
+                    ws.send(JSON.stringify({ type: 'no_rooms_available' }));
+                }
+            }
             else if (type === 'signal') {
                 // Forward signaling message (offer/answer/candidate) to the target peer
                 const roomCode = data.room;
