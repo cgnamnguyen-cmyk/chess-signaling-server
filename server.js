@@ -185,17 +185,30 @@ wss.on('connection', (ws) => {
         if (currentRoom && currentPeerId) {
             if (rooms.has(currentRoom)) {
                 const peers = rooms.get(currentRoom);
-                peers.delete(currentPeerId);
-                console.log(`[Disconnect] Peer ${currentPeerId} left room ${currentRoom}`);
                 
-                // Notify others
-                for (const [otherId, otherWs] of peers.entries()) {
-                    otherWs.send(JSON.stringify({ type: 'peer_left', peer_id: currentPeerId }));
-                }
-
-                if (peers.size === 0) {
+                if (currentPeerId === 1 || currentPeerId === '1') {
+                    // Host disconnected! Delete the entire room and notify/disconnect clients
+                    console.log(`[Disconnect] Host disconnected. Deleting room ${currentRoom}`);
+                    for (const [otherId, otherWs] of peers.entries()) {
+                        if (otherId !== currentPeerId) {
+                            otherWs.send(JSON.stringify({ type: 'server_disconnected' }));
+                        }
+                    }
                     rooms.delete(currentRoom);
-                    console.log(`[Cleanup] Room ${currentRoom} is empty, deleted.`);
+                } else {
+                    // Client disconnected
+                    peers.delete(currentPeerId);
+                    console.log(`[Disconnect] Client Peer ${currentPeerId} left room ${currentRoom}`);
+                    
+                    // Notify remaining peers (like the Host)
+                    for (const [otherId, otherWs] of peers.entries()) {
+                        otherWs.send(JSON.stringify({ type: 'peer_left', peer_id: currentPeerId }));
+                    }
+
+                    if (peers.size === 0) {
+                        rooms.delete(currentRoom);
+                        console.log(`[Cleanup] Room ${currentRoom} is empty, deleted.`);
+                    }
                 }
             }
         }
