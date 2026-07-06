@@ -1,7 +1,71 @@
+const http = require('http');
 const { WebSocketServer } = require('ws');
 
 const port = process.env.PORT || 8080;
-const wss = new WebSocketServer({ port });
+
+// ── Auth Code Relay (for mobile OAuth) ──────────────────────
+// Stores auth codes temporarily: sessionId -> { code, timestamp }
+const authCodes = new Map();
+
+// Clean up expired codes every 60 seconds
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of authCodes.entries()) {
+        if (now - val.timestamp > 300000) { // 5 minutes expiry
+            authCodes.delete(key);
+        }
+    }
+}, 60000);
+
+// ── HTTP Server ─────────────────────────────────────────────
+const server = http.createServer((req, res) => {
+    const url = new URL(req.url, `http://localhost:${port}`);
+
+    // CORS headers for game client polling
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+
+    if (url.pathname === '/auth/callback') {
+        // Google OAuth redirects here with ?code=XXX&state=SESSION_ID
+        const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state'); // session ID from game
+
+        if (code && state) {
+            authCodes.set(state, { code, timestamp: Date.now() });
+            console.log(`[Auth] Stored auth code for session: ${state}`);
+
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`<html><body style="font-family:sans-serif; text-align:center; padding-top:100px; background:#121116; color:#fff;">
+                <h1 style="color:#1db954;">Đăng nhập thành công!</h1>
+                <p style="font-size:18px;">Bạn có thể đóng trình duyệt này và quay lại trò chơi.</p>
+            </body></html>`);
+        } else {
+            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.end('Missing code or state parameter');
+        }
+    }
+    else if (url.pathname === '/auth/poll') {
+        // Game client polls this endpoint to retrieve the auth code
+        const session = url.searchParams.get('session');
+        if (session && authCodes.has(session)) {
+            const data = authCodes.get(session);
+            authCodes.delete(session); // One-time use
+            console.log(`[Auth] Delivered auth code for session: ${session}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: data.code }));
+        } else {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: null }));
+        }
+    }
+    else {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('Chess3D Signaling Server - Running');
+    }
+});
+
+// ── WebSocket Server (attached to HTTP server) ──────────────
+const wss = new WebSocketServer({ server });
 
 console.log(`[Signaling] Server running on port ${port}`);
 
@@ -117,4 +181,8 @@ wss.on('connection', (ws) => {
             }
         }
     });
+});
+
+server.listen(port, () => {
+    console.log(`[Server] HTTP + WebSocket server listening on port ${port}`);
 });
