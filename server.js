@@ -86,6 +86,11 @@ console.log(`[Signaling] Server running on port ${port}`);
 const rooms = new Map(); // roomCode -> Map(peerId -> socket)
 
 wss.on('connection', (ws) => {
+    ws.isAlive = true;
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    });
+
     let currentRoom = null;
     let currentPeerId = null;
 
@@ -195,6 +200,22 @@ wss.on('connection', (ws) => {
             }
         }
     });
+});
+
+// Ping clients every 30 seconds to clean up dead sockets
+const interval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) {
+            console.log('[Heartbeat] Inactive socket detected, terminating...');
+            return ws.terminate();
+        }
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
+
+wss.on('close', () => {
+    clearInterval(interval);
 });
 
 server.listen(port, () => {
