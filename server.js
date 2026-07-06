@@ -58,6 +58,20 @@ const server = http.createServer((req, res) => {
             res.end(JSON.stringify({ code: null }));
         }
     }
+    else if (url.pathname === '/status') {
+        // Diagnostic endpoint to check active rooms and peers
+        const roomsList = {};
+        for (const [roomCode, peers] of rooms.entries()) {
+            roomsList[roomCode] = Array.from(peers.keys());
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            status: 'Running',
+            active_rooms_count: rooms.size,
+            rooms: roomsList,
+            temporary_auth_codes_count: authCodes.size
+        }, null, 2));
+    }
     else {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('Chess3D Signaling Server - Running');
