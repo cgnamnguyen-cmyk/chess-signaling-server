@@ -164,6 +164,7 @@ wss.on('connection', (ws) => {
                 // Forward signaling message (offer/answer/candidate) to the target peer
                 const roomCode = data.room;
                 const targetId = data.target_id;
+                console.log(`[Signal] Forwarding signal type=${data.signal.type || 'candidate'} from ${currentPeerId} to ${targetId} in room ${roomCode}`);
                 
                 if (rooms.has(roomCode)) {
                     const peers = rooms.get(roomCode);
